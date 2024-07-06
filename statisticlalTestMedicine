@@ -1,0 +1,196 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy.stats import ttest_rel,  f_oneway, chi2_contingency
+
+# Read the dataset
+df = pd.read_csv('user_activities.csv')
+
+# Convert date to datetime and extract the day of the week
+df['date'] = pd.to_datetime(df['date'])
+df['day_of_week'] = df['date'].dt.day_name()
+
+#TASK 1: Calculate the total weekly duration of each activity type per user
+df['week'] = df['date'].dt.isocalendar().week
+df = df.sort_values(by='user_id', ascending=True)  # Sort by 'user_id' in ascending order
+weekly_duration = df.groupby(['user_id', 'week', 'activity_type'])['duration_minutes'].sum().reset_index()
+
+#Create a pivotal table for the results.
+pivot_weekly_df = weekly_duration.pivot_table(index=['user_id', 'week'], columns='activity_type', values='duration_minutes', fill_value=0)
+print(pivot_weekly_df)
+
+# Reset index to convert multi-index to columns
+pivot_df_reset = pivot_weekly_df.reset_index()
+
+#TASK 2A: Identify the two days with the largest difference
+def find_largest_diff(day_sum):
+    max_day = day_sum.idxmax()
+    min_day = day_sum.idxmin()
+    largest_diff = day_sum.max() - day_sum.min()
+    return max_day, min_day, largest_diff
+
+# Analyze data for each user
+def analyze_user_activity(user_data):
+    weekly_data = user_data.groupby(["day_of_week", "activity_type"])["duration_minutes"].sum().unstack(fill_value=0)
+    max_day_act, min_day_act, largest_diff = find_largest_diff(weekly_data)
+    return weekly_data, max_day_act, min_day_act, largest_diff
+
+#TASK 2B: Statistical tests whether there are activity differences in the days of the week per user.
+#Chi2 test
+def chi_test(contingency_table, user_id):
+    chi2, p, dof, expected = chi2_contingency(contingency_table)
+    # Print the results
+    print(f"Chi-Square Test Results for User{user_id}")
+    print("-----------------------")
+    print(f"Chi-Square Statistic: {chi2}")
+    print(f"p-value: {p}")
+    print(f"Degrees of Freedom: {dof}")
+    print("Expected Frequencies:")
+    print(pd.DataFrame(expected, index=contingency_table.index, columns=contingency_table.columns))
+
+    # Visualization
+    plt.figure(figsize=(12, 6))
+    sns.set(style="whitegrid")
+
+    # Heatmap of the actual frequencies
+    plt.subplot(1, 2, 1)
+    sns.heatmap(contingency_table, annot=True, cmap="YlGnBu", cbar=True)
+    plt.title(f'Actual Frequencies for User{user_id}')
+    plt.xlabel('Activity Type')
+    plt.ylabel('Day of the Week')
+
+    # Heatmap of the expected frequencies
+    plt.subplot(1, 2, 2)
+    sns.heatmap(pd.DataFrame(expected, index=contingency_table.index, columns=contingency_table.columns), annot=True,
+                cmap="YlGnBu", cbar=False)
+    plt.title(f'Expected Frequencies for User{user_id}')
+    plt.xlabel('Activity Type')
+    plt.ylabel('Day of the Week')
+
+    plt.tight_layout()
+    plt.show()
+    return chi2, p, dof, expected
+
+# Analyze data for each user
+user_results = {}
+user_results_ttest = {}
+
+for user_id in df["user_id"].unique():
+    user_data = df[df["user_id"] == user_id]
+    # TODO
+    contingency_table = pd.crosstab(user_data['day_of_week'],user_data['activity_type'], values=user_data['duration_minutes'],
+                                    aggfunc='sum').fillna(0)
+    # Perform the chi-square test
+    chi2, p, dof, expected = chi_test(contingency_table,user_id)
+    for activity in user_data['activity_type'].unique():
+        user_act_data = user_data[user_data['activity_type'] == activity]
+        t_contingency = pd.crosstab(user_act_data['day_of_week'], user_act_data['week'],
+                                        values=user_act_data['duration_minutes'],
+                                        aggfunc='sum').fillna(0)
+        # Find the weekday with the highest value in each week
+        highest_days = t_contingency.idxmax()
+        lowest_days = t_contingency.idxmin()
+
+
+        # Get the highest and lowest values for each week
+        highest_values = t_contingency.max()
+        lowest_values = t_contingency.min()
+
+        # Perform the paired t-test
+        t_stat, p_val = ttest_rel(highest_values, lowest_values)
+        significance = "Significant" if p_val < 0.05 else "Not Significant"
+        #Save the result
+        user_results_ttest[user_id] = {
+            'user_id': user_id,
+            't_stat': t_stat,
+            'p_val': p_val,
+            'significant': significance
+        }
+        weekly_data, max_day_act, min_day_act, largest_diff= analyze_user_activity(
+            user_act_data.copy())
+
+        # Convert max and min days series to DataFrame
+        max_days_df = max_day_act.to_frame(name='max_day').reset_index().rename(columns={'index': 'activity_type'})
+        min_days_df = min_day_act.to_frame(name='min_day').reset_index().rename(columns={'index': 'activity_type'})
+
+        user_results[user_id] = {
+            "max_days": max_days_df.values[0],
+            "min_days": min_days_df.values[0],
+            "largest_difference": largest_diff.values[0],
+            "Chi^2":chi2,
+            "p_value": p,
+            "significant": "Significant" if p < 0.05 else "Not Significant"
+
+        }
+
+
+# Display the results for total largest difference in activity per user
+for user_id, results in user_results.items():
+    print(f"User ID: {user_id}")
+    print("Max Days DataFrame:")
+    print(results['max_days'])
+    print("Min Days DataFrame:")
+    print(results['min_days'])
+    print(f"Largest Differences: \n{results['largest_difference']}")
+
+#Prepare for Chi2 plot.
+print(user_results)
+user_chi2 = pd.DataFrame.from_dict(user_results, orient='index')
+print(user_chi2)
+# Plot the distribution of p-values using violin plot
+plt.figure(figsize=(12, 6))
+sns.violinplot(x=user_chi2['p_value'])
+plt.axvline(0.05, color='red', linestyle='--')
+plt.title('Distribution of P-Values Across All Users in Chi^2 Test for Activity Differences by Day')
+plt.xlabel('P-Value')
+plt.tight_layout()
+plt.show()
+
+# Show the proportion of significant results
+significant_proportion = (user_chi2['significant'] == "Significant").mean()
+print(f"Proportion of significant results (p < 0.05): {significant_proportion:.2%}")
+
+
+
+#Plot the t-test result
+# Convert the dictionary to a DataFrame
+results_df = pd.DataFrame.from_dict(user_results_ttest, orient='index')
+print(results_df)
+
+# Plot the distribution of p-values using violin plot
+plt.figure(figsize=(12, 6))
+sns.violinplot(x=results_df['p_val'])
+plt.axvline(0.05, color='red', linestyle='--')
+plt.title('Distribution of P-Values Across All Users for the Largest Difference in Activity ')
+plt.xlabel('P-Value')
+plt.show()
+
+# Show the proportion of significant results
+significant_proportion = (results_df['significant'] == "Significant").mean()
+print(f"Proportion of significant results (p < 0.05): {significant_proportion:.2%}")
+
+
+#TASK 3:
+#Identify the day of the week with the highest total duration for each activity type
+daily_duration = df.groupby(['activity_type', 'day_of_week'])['duration_minutes'].sum().reset_index()
+max_day_duration = daily_duration.loc[daily_duration.groupby('activity_type')['duration_minutes'].idxmax()]
+
+# Print the day of the week with the highest total duration for each activity type
+print("Day of the week with highest total duration for each activity type:\n", max_day_duration)
+
+# Day of the week with the highest total duration per activity type
+plt.figure(figsize=(8, 5))
+bar_plot = sns.barplot(data=max_day_duration, x='day_of_week', y='duration_minutes', hue='activity_type', estimator=sum)
+
+# Annotate bars with the total duration
+for container in bar_plot.containers:
+    bar_plot.bar_label(container, fmt='%d', label_type='edge')
+
+plt.title('Day with Highest Total Duration per Activity Type')
+plt.xlabel('Day of the Week')
+plt.ylabel('Total Duration (minutes)')
+plt.legend(title='Activity Type')
+plt.tight_layout()
+plt.show()
+
