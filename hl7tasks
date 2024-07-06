@@ -1,0 +1,155 @@
+'''
+You may edit this file to add your code as per the mentioned instructions in the comments.
+Fill only the parts which mention 'TODO' in the corresponding comments above it.
+Make sure you read the instructions carefully.
+'''
+
+'''
+Before you start coding, you should use www.hl7inspector.com to interrogate the HL7 file.
+Load the message on www.hl7inspector.com to figure out the indices with which to access the fields.
+Experiment a bit to get the correct component and sub-component for the fields.
+'''
+
+'''
+You might have to install certain packages using the command 'pip install package_name' on your system.
+'''
+# TODO: Import necessary packages
+import json
+import hl7
+
+# TODO: Read the HL7 message file 'sample-hl7.txt'.
+with open('sample-hl7.txt', 'r') as file:
+# TODO: Convert the newlines to carriage returns to properly parse the HL7 message
+    hl7_message = file.read().replace('\n', '\r')
+# TODO: Parse the message
+parsed_message = hl7.parse(hl7_message)
+
+'''
+To retrieve any value, the convention is Message[segment][field][repetition][component][sub-component] 
+Here segment is the name, e.g., PID, PV1, OBX and field is the numeric index of the value from hl7inspector.com
+'''
+
+############# Retreiving the fields #############
+
+# TODO: Find the patient's ID
+patient_id = parsed_message['PID'][0][2]
+print("Patient ID: " + str(patient_id) + "\n")
+
+# TODO: Find the patient's name
+patient_name = parsed_message['PID'][0][5]
+print("Patient Name: " + str(patient_name) + "\n")
+
+# TODO: Find the patient's DOB
+patient_dob = parsed_message['PID'][0][7]
+print("Patient DOB: " + str(patient_dob) + "\n")
+# TODO: Find the name of the referring doctor
+referring_name = parsed_message['PV1'][0][8][0][2]
+referring_lname = parsed_message['PV1'][0][8][0][1]
+referring_doc = parsed_message['PV1'][0][8]
+name = str(referring_lname) +"^"+str(referring_name)
+print("Referring Doctor: " + str(referring_lname) +"^"+str(referring_name) + "\n\n")
+# TODO: Find the patient's administrative sex
+patient_as = parsed_message['PID'][0][8]
+print("Patient Sex: " + str(patient_as) + "\n")
+# TODO: Find the reason for study
+reason_st = parsed_message['OBR'][0][31]
+print("Reason for Study: " + str(reason_st) + "\n\n")
+# TODO: Find the procedure code
+proce_co = parsed_message['OBR'][0][44]
+print("Procedure Code: " + str(proce_co) + "\n\n")
+'''
+The diagnosis information is contained in multiple fields.  Therefore, the value will be an array.
+'''
+# TODO: Find lines of the diagnosis description
+diag_1 = parsed_message['DG1'][0][4]
+diag_2 = parsed_message['DG1'][1][4]
+diagnosis = [str(diag_1), str(diag_2)]
+print("Diagnosis Description: " + str(diag_1) +", "+ str(diag_2) + "\n\n")
+
+'''
+The impression information is contained in multiple fields.  Therefore, the value will be an array.
+'''
+# TODO: Find lines of the impression
+imp1 = str(parsed_message['OBX'][52][5])
+imp2 = str(parsed_message['OBX'][54][5])
+imp = [imp1, imp2]
+print("Impression: ", imp)
+#imp=parsed_message['OBX'][52][5]
+#print("Impression: ", str(imp) + "\n\n")
+
+
+'''
+Make sure you follow the json structure provided in the homework instructions.
+The keys for the fields are given below.  Please use the exact spelling in your output. 
+
+Patient ID
+Patient Name
+Patient DOB
+Referring Doctor Name
+Patient Sex
+Reason For Study
+Procedure Code
+Diagnosis Description
+Impression
+
+'''
+# TODO: Create the output data dictionary
+dict = {
+    "Patient ID": str(patient_id),
+    "Patient Name": str(patient_name),
+    "Patient DOB": str(patient_dob),
+    "Referring Doctor Name": str(referring_doc),
+    "Patient Sex": str(patient_as),
+    "Reason For Study": str(reason_st),
+    "Procedure Code": str(proce_co),
+    "Diagnosis Description": diagnosis,
+    "Impression": imp
+}
+# TODO: Store the data dictionary in a file as specified in the homework instructions.
+with open('output.json', 'w') as f:
+    json.dump(dict, f, indent=4)
+
+print("Data successfully saved to 'output.json'")
+
+############# Modifying the fields #############
+
+'''
+As per the homework instructions, modify the following fields and
+output the modified file. 
+Make sure each field is formatted as defined for the hl7 file format. 
+'''
+parsed_message1=parsed_message
+# TODO: Change the patient's ID
+parsed_message1['PID'][0][2] = '99999999'
+print("Patient ID Changed to : " + str(parsed_message1['PID'][0][2]) + "\n")
+# TODO: Change the patient's name
+parsed_message1['PID'][0][5] = 'Franklin^Benjamin'
+print("Patient Name Changed to: " + str(parsed_message1['PID'][0][5] ) + "\n")
+
+# TODO: Change the patient's DOB
+parsed_message1['PID'][0][7] = '19780101'
+print("Patient DOB Changed to : " + str(parsed_message1['PID'][0][7]) + "\n")
+
+# TODO: Change the patient's sex
+parsed_message1['PID'][0][8] = 'O'
+print("Patient Sex Changed to : " + str(parsed_message1['PID'][0][8]) + "\n")
+
+# TODO: Change the name and NPI number of the referring doctor in the patient visit segment
+parsed_message1['PV1'][0][8][0][0] ='0987654321'
+parsed_message1['PV1'][0][8][0][1] ='Spock'
+parsed_message1['PV1'][0][8][0][2] ='Thomas'
+print("Referring Doctor Name Changed to: " + str(parsed_message1['PV1'][0][8][0][2]) + "\n\n")
+
+# TODO: Change the reason for study
+parsed_message1['OBR'][0][31] = 'nonspecific abdominal pain'
+print("Reason for Study Changed to: " + str(parsed_message1['OBR'][0][31]) + "\n\n")
+
+############# Saving the modified file #############
+
+
+# TODO: Write the modified message as specified in the homework instructions
+with open('modified-hl7.txt', 'w') as outfile:
+    outfile.write(str(parsed_message1))
+
+############# ALL THE BEST :) #############
+
